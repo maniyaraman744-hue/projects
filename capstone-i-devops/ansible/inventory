@@ -1,0 +1,11 @@
+# Replace only the placeholders below with private EC2 addresses or private DNS names.
+# Do not commit PEM files or private SSH keys to this repository.
+[test]
+test-1 ansible_host=TEST_PRIVATE_IP ansible_user=ubuntu
+
+[prod]
+prod-1 ansible_host=PROD_PRIVATE_IP ansible_user=ubuntu
+
+[agents:children]
+test
+prod

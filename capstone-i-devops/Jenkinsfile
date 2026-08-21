@@ -1,0 +1,66 @@
+pipeline {
+    agent none
+
+    environment {
+        IMAGE_NAME = 'abode-web'
+        TEST_CONTAINER = 'abode-test'
+        PROD_CONTAINER = 'abode-production'
+    }
+
+    stages {
+        stage('Job1-Build') {
+            agent { label 'test' }
+            steps {
+                checkout scm
+                dir('capstone-i-devops') {
+                    sh 'docker build --pull -t ${IMAGE_NAME}:${BUILD_NUMBER} .'
+                }
+            }
+        }
+
+        stage('Job2-Test') {
+            agent { label 'test' }
+            steps {
+                sh '''
+                    docker rm -f "${TEST_CONTAINER}" || true
+                    docker run -d --name "${TEST_CONTAINER}" -p 8081:80 "${IMAGE_NAME}:${BUILD_NUMBER}"
+                    for attempt in 1 2 3 4 5 6; do
+                        curl --fail --silent --show-error http://localhost:8081/ && exit 0
+                        sleep 2
+                    done
+                    exit 1
+                '''
+            }
+            post {
+                always {
+                    sh 'docker rm -f "${TEST_CONTAINER}" || true'
+                }
+            }
+        }
+
+        stage('Job3-Prod') {
+            when { branch 'master' }
+            agent { label 'prod' }
+            steps {
+                checkout scm
+                dir('capstone-i-devops') {
+                    sh 'docker build --pull -t ${IMAGE_NAME}:prod .'
+                }
+                sh '''
+                    docker rm -f "${PROD_CONTAINER}" || true
+                    docker run -d --name "${PROD_CONTAINER}" -p 80:80 --restart unless-stopped "${IMAGE_NAME}:prod"
+                    for attempt in 1 2 3 4 5 6; do
+                        curl --fail --silent --show-error http://localhost/ && exit 0
+                        sleep 2
+                    done
+                    exit 1
+                '''
+            }
+        }
+    }
+
+    post {
+        success { echo 'Pipeline completed successfully.' }
+        failure { echo 'Pipeline failed. Check the stage log before retrying.' }
+    }
+}
